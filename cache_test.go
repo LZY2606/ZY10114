@@ -564,14 +564,14 @@ func Test_Cache_get(t *testing.T) {
 func Test_Cache_evict(t *testing.T) {
 	cc := map[string]struct {
 		MaxCost uint64
-	} {
+	}{
 		"evict without MaxCost": {
 			MaxCost: 0,
 		},
 		"evict with MaxCost": {
 			MaxCost: 5,
 		},
-	};
+	}
 
 	for cn, c := range cc {
 		t.Run(cn, func(t *testing.T) {
@@ -896,14 +896,14 @@ func Test_Cache_GetAndDelete(t *testing.T) {
 func Test_Cache_DeleteAll(t *testing.T) {
 	cc := map[string]struct {
 		MaxCost uint64
-	} {
+	}{
 		"DeleteAll without MaxCost": {
 			MaxCost: 0,
 		},
 		"DeleteAll with MaxCost": {
 			MaxCost: 5,
 		},
-	};
+	}
 
 	for cn, c := range cc {
 		t.Run(cn, func(t *testing.T) {
@@ -1176,8 +1176,11 @@ func Test_Cache_Start(t *testing.T) {
 	cache.stopCh = make(chan struct{})
 	cache.stopped = true
 
-	go cache.Start()
-	go cache.Start() // should be no-op
+	startDone := make(chan struct{})
+	go func() {
+		cache.Start()
+		close(startDone)
+	}()
 
 	assert.Eventually(t, func() bool {
 		cache.stopMu.Lock()
@@ -1185,7 +1188,22 @@ func Test_Cache_Start(t *testing.T) {
 		return !cache.stopped
 	}, time.Second, time.Millisecond*100)
 
+	duplicateStartDone := make(chan struct{})
+	go func() {
+		cache.Start() // should be no-op
+		close(duplicateStartDone)
+	}()
+	assert.Eventually(t, func() bool {
+		select {
+		case <-duplicateStartDone:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, time.Millisecond*100)
+
 	assert.NotPanics(t, cache.Stop)
+	<-startDone
 
 }
 
